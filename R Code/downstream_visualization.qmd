@@ -1,0 +1,468 @@
+---
+title: "Downstream Visualization"
+format: html
+editor: visual
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(DESeq2)
+library(pheatmap)
+library(RColorBrewer)
+library(annotables)
+library(reshape2)
+library(biomaRt)
+library(ComplexUpset)
+library(ggpubr)
+library(ComplexUpset)
+library(hrbrthemes)
+library(org.Mm.eg.db)
+```
+
+```{r}
+deseq_data <- read.csv("df_2.csv")
+deseq_data$state <- with(deseq_data, ifelse(log2FoldChange > 0, 1, -1))
+deseq_data <- subset(deseq_data, select = -c(X))
+deseq_data <- deseq_data |> distinct()
+
+organs <- c("Bone", "Brain","Brown_Fat", "Gonadal_Fat", "Heart", "Kidney", "Limb_Muscle", "Liver", "Lung", "Marrow","Mesenteric_Fat", "Pancreas", "Skin", "Small_Intestine", "Spleen", "Subcutaneous_Fat","White_Blood_Cells")
+
+ages <- c(1, 3, 6, 9, 12, 15, 18, 21, 24, 27)
+```
+
+A)  Number of DEGs Plot
+
+```{r}
+# gat_3 <- deseq_data |> filter(organ %in% "Gonadal_Fat" & base_age == 3)
+# gat_3_9 <- gat_3 |> filter(comparing_age == 9)
+# gat_3_9_deg <- sum(gat_3_9$state)
+# 
+# skin_3 <- deseq_data |> filter(organ %in% "Skin" & base_age == 3)
+# skin_3_18 <- skin_3 |> filter(comparing_age == 18)
+# skin_3_18_deg <- sum(skin_3_18$state)
+
+number_of_deg_organ <- function(org, b_age){
+  j <- 1
+  age_temp <- ages[ages > b_age]
+  vector <- vector(mode = "integer", length = length(age_temp))
+  for(i in age_temp){
+    if (j <= length(vector)){
+      f_data <- deseq_data |> filter(organ %in% org & base_age == b_age & comparing_age == i)
+      vector[j] <- sum(f_data$state)
+      j <- j + 1
+    }
+  }
+  return(vector)
+}
+
+#gat_3_no_deg <- number_of_deg_organ("Gonadal_Fat", 3)
+
+
+number_of_deg_organ_simple <- function(org, b_age){
+  j <- 1
+  age_temp <- ages[ages > b_age]
+  vector <- vector(mode = "integer", length = length(age_temp))
+  for(i in age_temp){
+    if (j <= length(vector)){
+      f_data <- deseq_data |> filter(organ %in% org & base_age == b_age & comparing_age == i)
+      vector[j] <- dim(f_data)[1]
+      j <- j + 1
+    }
+  }
+  return(vector)
+}
+
+#gat_3_no_deg_simple <- number_of_deg_organ_simple("Gonadal_Fat", 3)
+
+vis_number_of_deg_organ <- function(org, b_age){
+  j <- 1
+  age_temp <- ages[ages > b_age]
+  vector <- vector(mode = "integer", length = length(age_temp))
+  vector_simple <- vector(mode = "integer", length = length(age_temp))
+  for(i in age_temp){
+    if (j <= length(vector)){
+      f_data <- deseq_data |> filter(organ %in% org & base_age == b_age & comparing_age == i)
+      vector[j] <- sum(f_data$state)
+      vector_simple[j] <- dim(f_data)[1]
+      j <- j + 1
+    }
+  }
+  vis_df <- data.frame(age_temp, vector, vector_simple)
+  p1 <- ggplot(vis_df, aes(age_temp, vector)) + geom_path(se = FALSE) + labs(x = "Comparison (relative to 3 months)", y = "DEGs") + geom_hline(yintercept = 0, colour = "red") + scale_x_continuous(breaks = age_temp)
+  p2 <- ggplot(vis_df, aes(age_temp, vector_simple)) + geom_path(se = FALSE) + labs(x = "Comparison (relative to 3 months)", y = "# of DEGs") + expand_limits(y = 0) +  scale_x_continuous(breaks = age_temp)
+  return_list <- list(p1, p2)
+  return(return_list)
+}
+
+#vis_number_of_deg_organ("Skin", 3)
+
+number_of_deg_all <- function(b_age){
+  r <- 1
+  list <- vector("list", length = length(organs))
+  age_temp <- ages[ages > b_age]
+  for(k in organs){
+    j <- 1
+    #print(c("Organ", k))
+    if (r <= length(list)){
+      #print(c("r", r))
+      dge <- vector(mode = "integer", length = length(age_temp))
+      dge_simple <- vector(mode = "integer", length = length(age_temp))
+      for(i in age_temp){
+        #print(c("i", i))
+        if (j <= length(dge)){
+          #print(c("j", j))
+          f_data <- deseq_data |> filter(organ %in% k & base_age == b_age & comparing_age == i)
+          dge[j] <- sum(f_data$state)
+          dge_simple[j] <- dim(f_data)[1]
+          j <- j + 1
+        }
+      }
+      vis_df <- data.frame(dge, dge_simple)
+      list[[r]] <- vis_df
+      names(list)[r] <- k
+      r <- r + 1
+    }
+  }
+  df <- do.call(cbind, list)
+  df$age <- age_temp
+  df_long <- melt(df, id = "age")
+
+  df_long_dge <- df_long |> filter(!grepl("dge_simple", variable))
+  df_long_dge_simple <- df_long |> filter(grepl("dge_simple", variable))
+  
+  
+  p1 <- ggplot(df_long_dge) +
+  geom_path(aes(x = age, y = value, color = variable)) + 
+  labs(x = sprintf("Comparison (relative to %i months)", b_age), y = "Relative # of DEGs") +
+  geom_hline(yintercept = 0, colour = "red") + 
+  scale_x_continuous(breaks = age_temp) 
+  
+  p2 <- ggplot(df_long_dge_simple) +
+  geom_path(aes(x = age, y = value, color = variable)) + 
+  labs(x =  sprintf("Comparison (relative to %i months)", b_age), y = "Relative # of DEGs") + 
+  scale_x_continuous(breaks = age_temp)
+  
+  return(list(p1, p2))
+}
+
+#number_of_deg_all(3)
+
+ggsave("line_plot_deg_1.png", number_of_deg_all(1)[[1]])
+ggsave("line_plot_deg_1_simple.png", number_of_deg_all(1)[[2]])
+
+ggsave("line_plot_deg_3.png", number_of_deg_all(3)[[1]])
+ggsave("line_plot_deg_3_simple.png", number_of_deg_all(3)[[2]])
+
+ggsave("line_plot_deg_6.png", number_of_deg_all(6)[[1]])
+ggsave("line_plot_deg_6_simple.png", number_of_deg_all(6)[[2]])
+```
+
+B)  UpSet Plot - When comparing age and base age AND Frequency Tables
+
+```{r}
+common_genes <- function(c_age, b_age){
+  deseq_data_f <- deseq_data |> filter(comparing_age == c_age, base_age == b_age)
+  genes <- subset(deseq_data_f, select = c(ensgene, symbol))
+  genes <- genes |> replace_na(list(symbol = "Unknown"))
+  
+  freq_table <- as.data.frame(table(genes$ensgene))
+  names(freq_table)[names(freq_table) == 'Var1'] <- "ensgene"
+  
+  #symbol_freq_table <- grcm38 |> filter(ensgene %in% freq_table$ensgene) 
+  
+  freq_table_organ <- cbind(freq_table, "Bone" = NA, "Brain" = NA, "Brown_Fat" = NA, "Gonadal_Fat" = NA, "Heart" = NA, "Kidney" = NA, "Limb_Muscle" = NA, "Liver" = NA, "Lung" = NA, "Marrow" = NA, "Mesenteric_Fat" = NA, "Pancreas" = NA, "Skin" = NA, "Small_Intestine" = NA, "Spleen" = NA, "Subcutaneous_Fat" = NA, "White_Blood_Cells" = NA)
+  
+  freq_table_organ_head <- head(freq_table_organ, 3)
+  list <- vector("list", dim(freq_table_organ)[1])
+  k <- 1
+  for(i in 1:nrow(freq_table_organ)){
+      row <- freq_table_organ[i,]
+      gene <- as.character(freq_table_organ$ensgene[i])
+      #print(gene)
+      t <- deseq_data_f |> filter(ensgene == gene) |> subset(select =
+                                                               c(log2FoldChange,
+                                                                 organ))
+      #print(t)
+    
+      for(j in 1:ncol(row)){
+        #print(j)
+        if (j >= 3){
+          #print(j)
+          if(colnames(row)[j] %in% t$organ){
+            if(k <= length(list)){
+              organ_s <- colnames(row)[j]
+              #print(organ_s)
+              index_r <- which(colnames(row) == organ_s)
+              #print(index_r)
+              row[1,index_r] <- t$log2FoldChange[t$organ == organ_s]
+              #print(row)
+            }
+          }
+        }
+      }
+      list[[k]] <- row
+      k <- k + 1
+  }
+  final_table <- do.call(rbind, list)
+  return(final_table)
+}
+
+common_genes_freq <- function(c_age, b_age){
+  
+}
+
+test <- common_genes(27, 3)
+list_cg <- vector("list", dim(test)[1])
+k <- 1
+for(i in 1:nrow(head(test))){
+  row <- test[i, ]
+  row_f <- row |> select_if(~ !any(is.na(.)))
+  print(row_f)
+  orgs <- colnames(row_f)[3:ncol(row_f)]
+  orgs <- cat(paste(shQuote(orgs, type="cmd"), collapse=", "))
+  print(orgs)
+  # data_f_row <- data.frame(ensgene = row_f$ensgene, freq = row_f$Freq, organs = orgs)
+  # list_cg[[k]] <- data_f_row
+  # k <- k + 1
+}
+# test_table <- common_genes(27, 3)
+# test_table_tf <- subset(test_table, select = c(3:19))
+# 
+# test_table_tf[is.na(test_table_tf) == FALSE] <- "TRUE"
+# test_table_tf[is.na(test_table_tf) == TRUE] <- 'FALSE'
+
+
+upset_gen <- function(c_age, b_age){
+  table <- common_genes(c_age, b_age)
+  table_tf <- subset(table, select = c(3:19))
+  table_tf[is.na(table_tf) == FALSE] <- "TRUE"
+  table_tf[is.na(table_tf) == TRUE] <- 'FALSE'
+  organs <- colnames(table_tf)
+  p <- upset(table_tf, organs, name='Organ', width_ratio=0.1, min_degree = 1, max_degree = 1, wrap=TRUE, set_sizes=FALSE) + ggtitle(sprintf("%i vs %i", c_age, b_age))
+  return(p)
+}
+
+ggsave("27_v_1.png", upset_gen(27, 1))
+ggsave("27_v_3.png", upset_gen(27, 3))
+ggsave("27_v_6.png", upset_gen(27, 6))
+
+ggsave("24_v_1.png", upset_gen(24, 1))
+ggsave("24_v_3.png", upset_gen(24, 3))
+ggsave("24_v_6.png", upset_gen(24, 6))
+
+ggsave("21_v_1.png", upset_gen(21, 1))
+ggsave("21_v_3.png", upset_gen(21, 3))
+ggsave("21_v_6.png", upset_gen(21, 6))
+```
+
+C)  Normalized Count Expression for any gene
+
+```{r}
+organs <- c("Bone", "Brain","Brown_Fat", "Gonadal_Fat", "Heart", "Kidney", "Limb_Muscle", "Liver", "Lung", "Marrow","Mesenteric_Fat", "Pancreas", "Skin", "Small_Intestine", "Spleen", "Subcutaneous_Fat","White_Blood_Cells")
+ages <- c(1, 3, 6, 9, 12, 15, 18, 21, 24, 27)
+
+all_rawcounts <- read.table(file = "counttable_raw.tsv", header = TRUE)
+
+all_metadata <- read.table(file = "experimentDesign.tsv", header = TRUE)
+
+metadatacolnames <- rownames(all_metadata)
+colnames(all_rawcounts) <- metadatacolnames
+
+all_metadata$age <- factor(all_metadata$age)
+all_metadata$sex <- factor(all_metadata$sex)
+
+all_metadata_arr <- all_metadata |> arrange(tissue, age)
+idx_1 <- match(row.names(all_metadata_arr), colnames(all_rawcounts))
+all_rawcounts_arr <- subset(all_rawcounts, select = idx_1)
+
+list <- vector("list", 17)
+k <- 1
+for(i in organs){
+  organ_metadata <- all_metadata_arr |> filter(tissue == i)
+  organ_rawcount <- all_rawcounts_arr|> dplyr::select(matches(rownames(organ_metadata)))
+  metadatacolnames <- rownames(organ_metadata)/
+  colnames(organ_rawcount) <- metadatacolnames
+  organ_metadata$age <- factor(organ_metadata$age)
+  organ_metadata$sex <- factor(organ_metadata$sex)
+  
+  dds <- DESeqDataSetFromMatrix(countData = organ_rawcount,
+                                            colData = organ_metadata,
+                                            design = ~ sex + age)
+  
+  dds <- estimateSizeFactors(dds)
+  normalized_counts <- data.frame(counts(dds, normalized=TRUE))
+  list[[k]] <- normalized_counts
+  k <- k + 1
+}
+
+normalized_counts <- do.call(cbind, list)
+metadatacolnames_arr <- row.names(all_metadata_arr)
+colnames(normalized_counts) <- metadatacolnames_arr
+
+matching_symbols <- data.frame(mapIds(org.Mm.eg.db,
+                           keys = row.names(normalized_counts),
+                           keytype = "ENSEMBL",
+                           column = "SYMBOL"))
+colnames(matching_symbols)[1] <- "symbol"
+
+matching_symbols <- matching_symbols |> rownames_to_column(var = "ensgene")
+
+normalized_counts_search <- cbind(matching_symbols$symbol, normalized_counts)
+colnames(normalized_counts_search)[1] <- "symbol"
+
+gene_expression_plot <- function(gene, organ){
+  organ_metadata <- all_metadata_arr |> dplyr::filter(tissue %in% organ)
+  #print(organ_metadata)
+  organ_norm_counts <- normalized_counts |> dplyr::select(matches(row.names(organ_metadata)))
+  #print(organ_norm_counts)
+  organ_norm_counts <- cbind(matching_symbols, organ_norm_counts)
+  #print(organ_norm_counts)
+  row.names(organ_norm_counts) <- c(1:dim(organ_norm_counts)[1])
+  gene_row <- organ_norm_counts |> filter(symbol %in% gene)
+  #print(gene_row)
+  gene_row_t <- data.frame(t(subset(gene_row, select = c(3:length(colnames(gene_row))))))
+  #print(gene_row_t)
+  gene_row_t <- rownames_to_column(gene_row_t, var = "id")
+  colnames(gene_row_t)[2] <- "count"
+  
+  for(i in 1:nrow(gene_row_t)){
+    gene_row_t[i, 1] <-  str_split_1(gene_row_t$id[i], "-")[3]
+  }
+
+  gene_row_t$id <- factor(gene_row_t$id, levels=unique(gene_row_t$id))
+  tables <- split(gene_row_t, gene_row_t$id)
+  
+  row_list <- vector("list", length(ages))
+  k <- 1
+  for(i in tables){
+    i$count <- as.numeric(i$count)
+    mean <- mean(i$count)
+    std_error<- sd(i$count)/sqrt(length(i$count))
+    temp <- c(as.integer(as.character(i$id[1])), mean, std_error)
+    row_list[[k]] <- temp
+    k <- k + 1
+  }
+  
+  gene_row_f <- data.frame(do.call(rbind, row_list))
+  colnames(gene_row_f) <- c("age", "mean", "sem")
+  gene_row_t$count <- as.numeric(gene_row_t$count)
+  gene_row_t$id <- as.numeric(levels(gene_row_t$id))[gene_row_t$id]
+
+  p <- ggplot() +
+    geom_bar(data = gene_row_f, aes(x=age, y= mean), stat="identity", fill="skyblue", alpha=0.7) +
+    geom_errorbar(data = gene_row_f, aes(x=age, ymin= mean-sem, ymax=mean+sem), width=0.5, colour="orange", alpha=0.9, linewidth = 0.5) +
+    geom_point(data = gene_row_t, aes(x = id, y = count), size = 0.05) +
+    geom_smooth(data = gene_row_f, aes(x = age, y = mean), method = "loess", se = FALSE) +
+    scale_x_continuous(breaks = ages) + ggtitle(sprintf("%s - %s", gene, organ)) + labs(x = "Age (months)", y = "Normalized Counts") + theme(plot.title = element_text(size = 5), axis.title = element_text(size = 5), axis.text = element_text(size = 5)) 
+  
+    
+  return(p)
+}
+
+
+gene_expression_plot_all <- function(gene){
+  bone <- gene_expression_plot(gene, "Bone")
+  brain <- gene_expression_plot(gene, "Brain")
+  bfat <- gene_expression_plot(gene, "Brown_Fat")
+  gfat <- gene_expression_plot(gene, "Gonadal_Fat")
+  heart <- gene_expression_plot(gene, "Heart")
+  kidney <- gene_expression_plot(gene, "Kidney")
+  lm <- gene_expression_plot(gene, "Limb_Muscle")
+  liver <- gene_expression_plot(gene, "Liver")
+  lung <- gene_expression_plot(gene, "Lung")
+  mar <- gene_expression_plot(gene, "Marrow")
+  mfat <- gene_expression_plot(gene, "Mesenteric_Fat")
+  pan <- gene_expression_plot(gene, "Pancreas") 
+  skin <- gene_expression_plot(gene, "Skin")
+  sint <- gene_expression_plot(gene, "Small_Intestine")
+  spleen <- gene_expression_plot(gene, "Spleen")
+  sfat <- gene_expression_plot(gene, "Subcutaneous_Fat")
+  wbc <- gene_expression_plot(gene, "White_Blood_Cells")
+
+  figure <- ggarrange(bone, brain, bfat, gfat, heart, kidney, lm, liver, lung, mar, mfat, pan, skin, sint, spleen, sfat, wbc, ncol = 4, nrow = 5, widths = 0.5)
+  return(figure)
+}
+
+ggsave("il6.png", gene_expression_plot_all("Il6"))
+ggsave("il1b.png", gene_expression_plot_all("Il1b"))
+ggsave("p21.png", gene_expression_plot_all("Cdkn1a"))
+ggsave("p16.png", gene_expression_plot_all("Cdkn2a"))
+ggsave("p53.png", gene_expression_plot_all("Trp53"))
+ggsave("p53.png", gene_expression_plot_all("Trp53"))
+ggsave("rasgrf1.png", gene_expression_plot_all("Rasgrf1"))
+ggsave("padi2.png", gene_expression_plot_all("Padi2"))
+ggsave("il1a.png", gene_expression_plot_all("Il1a"))
+ggsave("igj.png", gene_expression_plot_all("Jchain"))
+ggsave("mmp12.png", gene_expression_plot_all("Mmp12"))
+ggsave("ereg.png", gene_expression_plot_all("Ereg"))
+```
+
+D)  Heatmaps of DEGs relative to a certain time point
+
+```{r}
+deseq_data <- read.csv("df_2.csv")
+deseq_data <- subset(deseq_data, select = -c(X))
+deseq_data <- deseq_data |> distinct()
+
+organs <- c("Bone", "Brain","Brown_Fat", "Gonadal_Fat", "Heart", "Kidney", "Limb_Muscle", "Liver", "Lung", "Marrow","Mesenteric_Fat", "Pancreas", "Skin", "Small_Intestine", "Spleen", "Subcutaneous_Fat","White_Blood_Cells")
+
+ages <- c(1, 3, 6, 9, 12, 15, 18, 21, 24, 27)
+
+age_temp_gen <- function(i){
+  if (i %in% ages){
+    age_temp <- ages[ages > i]
+    if (identical(age_temp, numeric(0))) {
+      age_temp <- c()
+    }
+  }
+  return(age_temp)
+}
+
+heatmap_gen <- function(age){
+  deseq_f <- deseq_data |> filter(base_age == age)
+  deseq_fd <- deseq_f |> filter(DGE == "Downregulated") 
+  deseq_fu <- deseq_f |> filter(DGE == "Upregulated")
+  list_d <- vector("list", 136)
+  list_u <- vector("list", 136)
+  k <- 1
+  c <- age_temp_gen(age)
+  for(i in organs){
+    # print(i)
+    for(j in c){
+      # print(j)
+      filtered_data <- deseq_fd |> filter(comparing_age == j, organ == i)
+      # print(dim(filtered_data)[1])
+      list_d[[k]] <- data.frame(x  = j, y = i, value = dim(filtered_data)[1])
+      k <- k + 1
+      
+    }
+  }
+  
+  for(i in organs){
+    # print(i)
+    for(j in c){
+      # print(j)
+      filtered_data <- deseq_fu |> filter(comparing_age == j, organ == i)
+      # print(dim(filtered_data)[1])
+      list_u[[k]] <- data.frame(x  = j, y = i, value = dim(filtered_data)[1])
+      k <- k + 1
+      
+    }
+  }
+  
+  df_d <- do.call(rbind, list_d)
+  df_u <- do.call(rbind, list_u)
+  d <- ggplot(data = df_d, mapping = aes(x = x, y = y, fill = value)) + geom_tile(colour="white", linewidth=0.25) + scale_fill_gradient(low="grey", high="blue") + labs(x = "", y = "") + scale_x_continuous(breaks = c)  + theme_grey(base_size=10) + ggtitle("Downregulated DEGs") + theme(plot.title = element_text(size = "10", face = "plain"))
+  u <- ggplot(data = df_u, mapping = aes(x = x, y = y, fill = value)) + ggtitle("Upregulated DEGs") +  geom_tile(colour="white", linewidth=0.25) + scale_fill_gradient(low="grey", high="red") + labs(x = "", y = "") + scale_x_continuous(breaks = c) + theme_grey(base_size= 10) + theme(plot.title = element_text(size = "10", face = "plain"))
+  figure <- ggarrange(d, u, ncol = 2, nrow = 1)
+  figure <- annotate_figure(figure, top = text_grob(sprintf("Relative to %i months", age), color = "black", face = "bold", size = 12))
+  return(figure)
+}
+
+ggsave("ht_1.png", heatmap_gen(1))
+ggsave("ht_3.png", heatmap_gen(3))
+ggsave("ht_6.png", heatmap_gen(6))
+
+```

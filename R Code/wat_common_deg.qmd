@@ -1,0 +1,111 @@
+---
+title: "White Adipose Tissue Common DEG"
+format: html
+editor: visual
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(gplots)
+library(ComplexUpset)
+library(VennDiagram)
+library(org.Mm.eg.db)
+```
+
+```{r}
+deg_a <- read.csv("df_3_organs_all.csv")
+deg_a_f <- deg_a|> filter(organ %in% c("Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat"), sec_prot %in% "Secreted") |> arrange(desc(log2FoldChange))
+write.csv(deg_a_f, "deg_wat.csv")
+```
+
+```{r}
+list <- vector("list", 3)
+list_o <- split(deg_a_f, f = deg_a_f$organ)
+
+
+k <- 1
+for(i in list_o){
+  sym <- i$symbol
+  sym <- data.frame(sym[!is.na(sym)])
+  colnames(sym)[1] <- "symbol"
+  sym <- sym |> distinct()
+  list[[k]] <- as.character(sym$symbol)
+  k <- k + 1
+}
+
+
+names(list) <- c("Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat")
+int <- Reduce(intersect, list)
+```
+
+```{r}
+vec_gen <- function(intersection){
+  vector <- c()
+  for(i in intersection){
+    df <- deg_a_f |> filter(symbol %in% i)
+    if(length(unique(df$DGE)) == 1){
+      vector <- append(vector, i)
+    }
+  }
+  vector_u <- c()
+  vector_d <- c()
+  for(i in vector){
+    df <- deg_a_f |> filter(symbol %in% i)
+    if(length(unique(df$DGE)) == 1 & df$DGE[1] %in% "Upregulated"){
+      vector_u <- append(vector_u, i)
+    }
+    if(length(unique(df$DGE)) == 1 & df$DGE[1] %in% "Downregulated"){
+      vector_d <- append(vector_d, i)
+      }
+  }
+  ls <- list(sort(vector_u), sort(vector_d))
+  names(ls) <- c("Upregulated" , "Downregulated")
+  return(ls)
+}
+
+vec <- vec_gen(intersection = int)
+```
+
+```{r}
+display_venn <- function(x, ...){
+  library(VennDiagram)
+  grid.newpage()
+  venn_object <- venn.diagram(x, filename = NULL, ...)
+  grid.draw(venn_object)
+}
+
+display_venn(
+  list,
+  fill = c("#999999", "#E69F00", "#56B4E9")
+  )
+```
+
+```{r}
+v.table <- venn(list)
+```
+
+```{r}
+vec_t <- unlist(vec)
+df <- deg_a_f |> filter(symbol %in% vec_t)
+df <- subset(df, select = -c(organ)) |> distinct() |> arrange(desc(DGE), symbol)
+```
+
+```{r}
+list_m <- vector("list", 64)
+k <- 1
+for(i in df$symbol){
+  f <- deg_a_f |> filter(symbol %in% i)
+  list_m[[k]] <- median(f$log2FoldChange)
+  k <- k + 1
+}
+
+median <- do.call(rbind, list_m)
+df <- cbind(df, median)
+df <- df |> arrange(desc(median))
+df_n <- subset(df, select = c(symbol, median)) |> distinct()
+#write.csv(df_n, "common_deg_wat.csv", row.names = FALSE)
+saveRDS(int, "int.RData")
+vec_test <- readRDS("int.RData")
+```

@@ -1,0 +1,129 @@
+---
+title: "Secondary WAT Secretome Database Gen"
+format: html
+editor: visual
+---
+
+```{r}
+library(DESeq2)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(annotables)
+library(VennDiagram)
+```
+
+```{r}
+organs <- c("Bone", "Brain","Brown_Fat", "Gonadal_Fat", "Heart", "Kidney", "Limb_Muscle", "Liver", "Lung", "Marrow","Mesenteric_Fat", "Pancreas", "Skin", "Small_Intestine", "Spleen", "Subcutaneous_Fat","White_Blood_Cells")
+
+all_rawcounts <- read.table(file = "counttable_raw.tsv", header = TRUE)
+
+all_metadata <- read.table(file = "experimentDesign.tsv", header = TRUE)
+
+metadatacolnames <- rownames(all_metadata)
+colnames(all_rawcounts) <- metadatacolnames
+```
+
+```{r}
+ensgene <- grcm38$ensgene
+symbol <- grcm38$symbol
+descr <- grcm38$description
+```
+
+```{r}
+secreted_proteins <- read_tsv("uniprot_secprot.tsv")
+  gene_names <- secreted_proteins$"Gene Names"
+  gene_names_unique <- unique(gene_names)
+  secreted_proteins_final <- secreted_proteins %>% distinct(`Gene Names`, .keep_all = TRUE)
+  gene_list <- list()
+
+  for(i in gene_names_unique){
+
+    if(grepl("\\s+", i) == TRUE){
+    gene_list <- append(gene_list, str_split(i, " "))
+    }
+    else{
+      gene_list <- append(gene_list, i)
+    }
+  }
+
+  gene_vector <- unlist(gene_list)
+```
+
+```{r}
+new_metadata <- all_metadata
+new_metadata$age_n <- with(new_metadata, case_when(age %in% c(1, 3, 6) ~ "Y",
+                                                   age %in% c(9, 12, 15, 18) ~ "M",
+                                                   age %in% c(21, 24, 27) ~ "O"))
+                                                   
+```
+
+```{r}
+DESeq_SecProt_Tool_Reduced <- function(organ, metadata){
+  #filtering for organ and age
+  organ_metadata <- metadata |> 
+  filter(tissue %in% organ)
+
+  organ_rawcount <- all_rawcounts|>
+  dplyr::select(matches(rownames(organ_metadata)))
+  
+  organ_metadata$age_n <- factor(organ_metadata$age_n)
+  organ_metadata$sex <- factor(organ_metadata$sex)
+  
+  #creating DESeq object
+  dds_organ <- DESeqDataSetFromMatrix(countData = organ_rawcount,
+                                      colData = organ_metadata,
+                                      design = ~ sex + age_n)
+  #DESeq2 Analysis
+  dds_organ <- DESeq(dds_organ)
+
+  dds_organ$age_n <- relevel(dds_organ$age_n, ref = "Y")
+  dds_organ <- nbinomWaldTest(dds_organ)
+
+  organ_res <- results(dds_organ,
+                       contrast = c("age_n", "O", "Y"),
+                       alpha = 0.05)
+  #Shrinking Log2FC
+  organ_res <- lfcShrink(dds_organ,
+                             coef = "age_n_O_vs_Y",
+                             type = "apeglm")
+
+
+  #Annotation 1 - GRCM38
+  organ_res_df <- data.frame(organ_res) |>
+  rownames_to_column(var = "ensgene")
+
+  organ_res_final <- left_join(x = organ_res_df,
+                               y = grcm38[, c("ensgene", "symbol", "biotype", "description")],
+                               by = "ensgene")
+
+  organ_res_final$DGE <- with(organ_res_final, ifelse(log2FoldChange > 0,
+                                                      'Upregulated',
+                                                      'Downregulated'))
+
+  organ_res_final$threshold <- with(organ_res_final, ifelse(padj < 0.05,
+                                                            'Significant',
+                                                            'Insignificant'))
+
+  #Annotation 2 - Sec_Prot_Uniprot
+  common_genes <- (gene_vector[gene_vector %in% organ_res_final$symbol])
+  organ_res_final$"sec_prot" <- with(organ_res_final, ifelse(symbol %in% common_genes, 'Secreted', 'Not Secreted'))
+
+
+  organ_res_final$"-log10(padj)" <- with(organ_res_final, -log10(padj))
+  organ_res_final$"score" <- with(organ_res_final, -log10(padj)*log2FoldChange)
+  organ_res_final$"organ" <- with(organ_res_final, organ)
+  organ_res_final <- organ_res_final |> filter(padj != 0, threshold == "Significant") |> arrange(desc(log2FoldChange))
+  return(organ_res_final)
+}
+```
+
+```{r}
+list_deg_o <- vector("list", 17)
+k <- 1
+for(i in c("Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat")){
+  list_deg_o[[k]] <- DESeq_SecProt_Tool_Reduced(i, new_metadata)
+  k <- k + 1
+}
+
+df <- do.call(rbind, list_deg_o_2)

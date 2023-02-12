@@ -1,0 +1,154 @@
+---
+title: "Adipose Analysis"
+format: html
+editor: visual
+---
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(datapasta)
+```
+
+```{r}
+deg_a <- read.csv("df_3_organs_all.csv") |> distinct()
+deg_a_f <- deg_a |> filter(organ %in% c("Brown_Fat", "Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat"), sec_prot %in% "Secreted")
+```
+
+```{r}
+frq_fn <- function(x, org, ud){
+  noc <- length(unique(x[,13]))
+  list <- vector("list", length = noc)
+  k <- 1
+  for(i in c(1, 2, 3, 4, 5, 7, 8, 9, 11)){
+    print(i)
+    xf <- x |> dplyr::filter(x[,13] %in% sprintf("Cluster %i", i))
+    gene_sets <- xf$"EnrichmentMap..Genes"
+    gene_sets_s  <- c(paste(gene_sets ,collapse="|"))
+    gene_sets_sc <- str_replace_all(gene_sets_s, "[|]", ",")
+    gene_sets_scv <- str_split_1(gene_sets_sc, ",")
+    gene_table <- data.frame(table(gene_sets_scv)) |> arrange(desc(Freq))
+    colnames(gene_table)[1] <- "symbol"
+    
+    vec <- vector("character", length = dim(gene_table)[1])
+    l <- 1
+    for(i in gene_table$symbol){
+      vec[[l]] <- str_to_sentence(i)
+      l <- l + 1
+    }
+    gene_table$symbol <- vec
+    gene_table <- gene_table[order(gene_table$symbol),]
+    org_deg <- deg_a_f |> filter(symbol %in% gene_table$symbol, organ %in% org, DGE %in% ud)
+    org_deg <- org_deg[order(org_deg$symbol),]
+    gene_table$lfc <- org_deg$log2FoldChange
+    gene_table$freq_n <- with(gene_table, gene_table$Freq/max(gene_table$Freq))
+    gene_table$lfc_n <- with(gene_table, abs(gene_table$lfc)/max(abs(gene_table$lfc)))
+    gene_table$score <- with(gene_table, gene_table$freq_n*abs(gene_table$lfc_n))
+    gene_table <- gene_table |> arrange(desc(score))
+    list[[k]] <- gene_table
+    k <- k + 1
+  }
+  return(list)
+}
+```
+
+SCAT
+
+Upregulated
+
+```{r}
+scat_u <- read.csv("ad_all_tissues_sec/scat/scat_u/scat_u_en.csv")
+scat_u_ls <- frq_fn(scat_u, "Subcutaneous_Fat", "Upregulated")
+```
+
+Downregulated
+
+```{r}
+scat_d <- read.csv("ad_all_tissues_sec/scat/scat_d/scat_d_en.csv")
+scat_d_ls <- frq_fn(scat_d, "Subcutaneous_Fat", "Downregulated")
+```
+
+MAT
+
+Upregulated
+
+```{r}
+mat_u <- read.csv("ad_all_tissues_sec/mat/mat_u/mat_u_en.csv")
+mat_u_ls <- frq_fn(mat_u, "Mesenteric_Fat", "Upregulated")
+```
+
+Downregulated
+
+```{r}
+mat_d <- read.csv("ad_all_tissues_sec/mat/mat_d/mat_d_en.csv")
+mat_d_ls <- frq_fn(mat_d, "Mesenteric_Fat", "Downregulated")
+```
+
+GAT
+
+Upregulated
+
+```{r}
+gat_u <- read.csv("ad_all_tissues_sec/gat/gat_u/gat_u_en.csv")
+gat_u_ls <- frq_fn(gat_u, "Gonadal_Fat", "Upregulated")
+```
+
+Downregulated
+
+```{r}
+gat_d <- read.csv("ad_all_tissues_sec/gat/gat_d/gat_d_en.csv")
+gat_d_ls <- frq_fn(gat_d, "Gonadal_Fat", "Downregulated")
+```
+
+```{r}
+saveRDS(scat_u_ls, file = "ad_all_tissues_sec/scat/scat_u/scat_u.RData")
+saveRDS(scat_d_ls, file = "ad_all_tissues_sec/scat/scat_d/scat_d.RData")
+
+saveRDS(mat_u_ls, file = "ad_all_tissues_sec/mat/mat_u/mat_u.RData")
+saveRDS(mat_d_ls, file = "ad_all_tissues_sec/mat/mat_d/mat_d.RData")
+
+saveRDS(gat_u_ls, file = "ad_all_tissues_sec/gat/gat_u/gat_u.RData")
+saveRDS(gat_d_ls, file = "ad_all_tissues_sec/gat/gat_d/gat_d.RData")
+```
+
+```{r}
+mat_u_ls <- readRDS("ad_all_tissues_sec/mat/mat_u/mat_u.RData")
+mat_d_ls <- readRDS("ad_all_tissues_sec/mat/mat_d/mat_d.RData")
+
+scat_u_ls <- readRDS("ad_all_tissues_sec/scat/scat_u/scat_u.RData")
+scat_d_ls <- readRDS("ad_all_tissues_sec/scat/scat_d/scat_d.RData")
+
+gat_u_ls <- readRDS("ad_all_tissues_sec/gat/gat_u/gat_u.RData")
+gat_d_ls <- readRDS("ad_all_tissues_sec/gat/gat_d/gat_d.RData")
+```
+
+```{r}
+mat_u_table <- data.frame(table(c("Lep", "Serpine1", "Trem2", "Ccl8", "Ccl2", "Lep", "Trem2", "Il12b", "Il6", "Mmp12", "Trem2", "Lep", "Il6", "Il12b", "Serpine1", "Trem2", "Lep", "Crp", "C4b", "C6", "Serpine1", "F11", "F7", "Plau", "Kng2", "Serpine1", "Timp4", "Fetub", "Serpina9", "C4b", "Amtn", "Ostn", "Adgrv1", "Mepe", "Enam", "Mmp12", "Cma1", "Adamts5", "Angptl7", "Mmp10", "Mmp12", "Trem2", "Il1rn", "Il6", "Il1r2", "Pla2g2e", "Lep", "Pla2g2d", "Anxa1", "Oc90", "Chit1", "Chil3", "Chil1", "Chit1", "Chil3", "Chil1", "Ccl8", "Wnt1", "Trem2", "Cxcl9", "Ins2", "Adamts5", "Spp1", "Mmp12", "Serpine1", "Vwc2", "Myoc"))) |> arrange(desc(Freq))
+```
+
+```{r}
+mat_d_table <- data.frame(table(c("Nog", "Edn3", "Tgfb2", "Grem1", "Ptn", "Grem1", "Tgfb2", "Nog", "Emilin1", "Npnt", "Grem1", "Nog", "Dkk3", "Cpe", "Dkk2", "Defa24", "Reg3b", "Zg16", "Itln1", "Cxcl14", "Edn3", "Nrtn", "Lama5", "Kitl", "Edn1", "Wfdc1", "Pcsk1", "Itih4", "Snca", "Serpini1", "Grem1", "Emilin1", "Chadl", "Tgfb2", "Adamts7", "Mmp17", "Emilin1", "Npnt", "Tgfb2", "Grem1", "Wfdc1", "Tafa5", "Cd9", "Vtn", "Pdgfa"))) |> arrange(desc(Freq))
+```
+
+```{r}
+gat_u_table <- data.frame(table(c("Trem2", "Fgf23", "Lep", "Il10", "Tnf", "Trem2", "Cxcl13", "Ccl2", "Il10", "Ccl3", "Trem2", "Tnf", "Mmp12", "Lep", "Ccl2", "F7", "Serpine1", "Hpse", "Kng2", "Plau", "Trem2", "Bdnf", "Slit1", "Tnr", "Lep", "Ccl2", "Il10", "Mmp12", "Cxcl2", "Cxcl13", "Wfdc6b", "Kng2", "Il9r", "Wfikkn2", "Serpinb2", "Fgf23", "Cxcl13", "Fgf21", "Gpc1", "Fgf18", "Sfrp5", "Gdf3", "Vwc2", "Fstl3", "Sfrp4", "Mmp12", "Cma1", "Ctss", "Adamts13", "Tnr", "Mmp12", "Fgf23", "Trem2", "Chit1", "Hpse", "Il10", "Cck", "Ctss", "Nmu", "Ccl3"))) |> arrange(desc(Freq))
+```
+
+```{r}
+gat_d_table <- data.frame(table(c("Angpt1", "Agt", "Kdr", "Vegfa", "Fgf10", "Agt", "Npnt", "Angpt1", "Vegfa", "Ptn", "Col3a1", "Col4a3", "Col4a5", "Col1a1", "Col4a1", "Ren1", "Col3a1", "Agt", "Serpina1a", "Col1a1", "Serpina3k", "Ithi4", "Serpina3b", "Serpina1a", "Agt", "Col3a1", "Igf1", "Serpina1a", "Agt", "Fgf10", "Ren1", "Lipg", "Agt", "Pon1", "Apoc1", "Angpt4", "Ptn", "Tafa5", "Col3a1", "Adamts9", "Agt", "Tafa5", "Postn", "Vtn", "Retn", "??????U"))) |> arrange(desc(Freq))
+
+```
+
+```{r}
+scat_u_table <- data.frame(table(c("Lep", "Thbs1", "Fgf1", "Serpine1", "Nog", "Nog", "Lep", "Sema3f", "Thbs1", "Bmp2", "Serpine1", "Thbs1", "Apoh", "Serpinf2", "Plg", "F7", "Serpine1", "Hpse", "Kng2", "Plau", "Serpine1", "Lep", "Bmp2", "Nog", "Sfrp5", "Apoa5", "Lep", "Hamp", "Hpx", "Apoh", "Serpina1d", "Serpine1", "Timp4", "Ambp", "Serpinf2", "Adamts5", "Serpinf2", "Plg", "Bmp2", "Ltbp4", "Apoa5", "Apoh", "Lep", "Pla2g5", "Lipc"))) |> arrange(desc(Freq))
+
+
+```
+
+```{r}
+scat_d_table <- data.frame(table(c("Ccl21a", "Ccl19", "Ccl5", "Cxcl13", "Lta", "Cola1a2", "Cola1a1", "Col3a1", "Fn1", "Sfrp2", "Ptn", "Ccl5", "Sfrp2", "C3", "Fgf18", "Sfrp2", "Sfrp4", "Sorl1", "Col3a1", "Cxcl13", "C3", "Ccl19", "Lta", "C1qa", "Dpp4", "Timp1", "Sorl1", "Apoc1", "Lipg", "Clu", "Timp1", "Sfrp2", "C3", "Sorl1", "Cst7", "Lta", "Pglypr2", "Ssc5d", "Rnase6", "Pglyrp1"))) |> arrange(desc(Freq))
+```
+
+```{r}
+deg_a_ff <- subset(deg_a_f, select = c(symbol, DGE, organ)) |> arrange(symbol)
+```

@@ -1,0 +1,176 @@
+---
+title: "Transcriptomic Differntially Expressed Gene Secretome Database Generation"
+author: "Sadiq"
+format: html
+editor: visual
+---
+
+```{r}
+library(DESeq2)
+library(tidyverse)
+library(ggplot2)
+library(annotables)
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(reshape2)
+```
+
+```{r}
+organs <- c("Bone", "Brain","Brown_Fat", "Gonadal_Fat", "Heart", "Kidney", "Limb_Muscle", "Liver", "Lung", "Marrow","Mesenteric_Fat", "Pancreas", "Skin", "Small_Intestine", "Spleen", "Subcutaneous_Fat","White_Blood_Cells")
+ages <- c(1, 3, 6, 9, 12, 15, 18, 21, 24, 27)
+
+all_rawcounts <- read.table(file = "counttable_raw.tsv", header = TRUE)
+all_metadata <- read.table(file = "experimentDesign.tsv", header = TRUE)
+
+metadatacolnames <- rownames(all_metadata)
+colnames(all_rawcounts) <- metadatacolnames
+
+all_metadata$age <- factor(all_metadata$age)
+all_metadata$sex <- factor(all_metadata$sex)
+```
+
+```{r}
+DESeq_SecProt_Tool_Reduced <- function(organ, comparing_age, base_age){
+  #filtering for organ and age
+  organ_metadata <- all_metadata |> 
+  filter(tissue %in% organ)
+
+  organ_rawcount <- all_rawcounts|>
+  select(matches(rownames(organ_metadata)))
+  
+  organ_metadata$age <- factor(organ_metadata$age)
+  organ_metadata$sex <- factor(organ_metadata$sex)
+  
+  #creating DESeq object
+  dds_organ <- DESeqDataSetFromMatrix(countData = organ_rawcount,
+                                      colData = organ_metadata,
+                                      design = ~ sex + age)
+  #DESeq2 Analysis
+  dds_organ <- DESeq(dds_organ)
+  
+  dds_organ$age <- relevel(dds_organ$age, ref = as.character(base_age))
+  dds_organ <- nbinomWaldTest(dds_organ)
+
+  #Results
+  organ_res <- results(dds_organ, 
+                             contrast = c("age", comparing_age, base_age), 
+                             alpha = 0.05)
+  #Shrinking Log2FC
+  organ_res <- lfcShrink(dds_organ,
+                             coef = sprintf("age_%i_vs_%i", comparing_age, base_age),
+                             type = "apeglm")
+  
+  
+  #Annotation 1 - GRCM38
+  ensgene <- grcm38$ensgene
+  symbol <- grcm38$symbol
+  descr <- grcm38$description
+  organ_res_df <- data.frame(organ_res) |>
+  rownames_to_column(var = "ensgene")
+  
+  organ_res_final <- left_join(x = organ_res_df, 
+                               y = grcm38[, c("ensgene", "symbol", "biotype", "description")], 
+                               by = "ensgene")
+                                     
+  organ_res_final$DGE <- with(organ_res_final, ifelse(log2FoldChange > 0, 
+                                                      'Upregulated',   
+                                                      'Downregulated'))
+  
+  organ_res_final$threshold <- with(organ_res_final, ifelse(padj < 0.05,          
+                                                            'Significant',
+                                                            'Insignificant'))
+  
+  #Annotation 2 - Sec_Prot_Uniprot
+  secreted_proteins <- read_tsv("uniprot_secprot.tsv")
+  gene_names <- secreted_proteins$"Gene Names"
+  gene_names_unique <- unique(gene_names)
+  secreted_proteins_final <- secreted_proteins %>% distinct(`Gene Names`, .keep_all = TRUE)
+  gene_list <- list()
+  
+  for(i in gene_names_unique){
+    
+    if(grepl("\\s+", i) == TRUE){
+    gene_list <- append(gene_list, str_split(i, " "))
+    }
+    else{
+      gene_list <- append(gene_list, i)
+    }
+  }
+
+  gene_vector <- unlist(gene_list)
+  
+  common_genes <- (gene_vector[gene_vector %in% organ_res_final$symbol])
+  organ_res_final$"sec_prot" <- with(organ_res_final, ifelse(symbol %in% common_genes, 'Secreted', 'Not Secreted'))
+  
+  
+  organ_res_final$"-log10(padj)" <- with(organ_res_final, -log10(padj))
+  organ_res_final$"score" <- with(organ_res_final, -log10(padj)*log2FoldChange)
+  organ_res_final$"organ" <- with(organ_res_final, organ)
+  organ_res_final$"comparing_age" <- with(organ_res_final, comparing_age)
+  organ_res_final$"base_age" <- with(organ_res_final, base_age)
+  
+  organ_res_final <- organ_res_final |> filter(padj != 0, sec_prot == "Secreted", threshold == "Significant") |> arrange(desc(log2FoldChange))
+  return(organ_res_final)
+}
+
+DESeq_SecProt_Tool_Reduced("Limb_Muscle", 27, 24)
+```
+
+```{r}
+top_genes <- function(age, base_age){
+  s <- 1
+  list <- vector("list", length(organs))
+  for(i in organs){
+    print(i)
+    print(age)
+    print(base_age)
+    if(s <= length(organs)){
+      list[[s]] <- DESeq_SecProt_Tool_Reduced(i, age, base_age)
+      s <- s + 1
+    }
+  } 
+  df <- do.call(rbind, list)
+  return(df)
+}
+
+age_temp_gen <- function(i){
+  if (i %in% ages){
+    age_temp <- ages[ages > i]
+    if (identical(age_temp, numeric(0))) {
+      age_temp <- c()
+    }
+  }
+  return(age_temp)
+}
+
+sec_prot_all_ages_limb_muscle <- function(){
+    k <- 1
+    mega_list <- vector("list", sum(1:9))
+    for(i in ages){
+      for(j in age_temp_gen(i)){
+        if(k <= length(mega_list)){
+          if (i == 24 & j == 27){
+            mega_list[[k]] <- NULL
+            k <- k + 1
+          }
+          else{
+            mega_list[[k]] <- top_genes(j, i)
+            k <- k + 1
+          }
+        }
+      }
+    }
+    mega_df <- do.call(rbind, mega_list)
+    return(mega_df)
+    
+}
+
+    
+
+  
+  
+final_df <- sec_prot_all_ages_limb_muscle()
+# write.csv(final_df, "C:\\Users\\mmdoh\\Documents\\Sadiq\\CPC_Summer\\bulkRNA_2\\df_2.csv")
+# df <- read.csv("df_2.csv") |> arrange(desc(log2FoldChange))
+# write.csv(df, "df_2_a.csv")
+```

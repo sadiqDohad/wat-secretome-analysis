@@ -1,0 +1,296 @@
+---
+title: "Adipose Profiles"
+format: html
+editor: visual
+---
+
+```{r}
+library(DESeq2)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(org.Mm.eg.db)
+library(gprofiler2)
+library(clusterProfiler)
+library(annotables)
+```
+
+G:Profiler
+
+Secreted Proteins
+
+```{r}
+deg_a <- read.csv("df_3_all_organs.csv")
+deg_a_f <- deg_a|> filter(organ %in% c("Brown_Fat", "Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat"), sec_prot %in% "Secreted")
+
+bat_up <- deg_a_f |> filter(organ %in% "Brown_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+bat_up_g <- bat_up$symbol
+write.table(bat_up_g, "ad_all_tissues_sec/bat_u_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+bat_down <- deg_a_f |> filter(organ %in% "Brown_Fat", DGE %in% "Downregulated") |> arrange(log2FoldChange)
+bat_down_g <- bat_down$symbol
+write.table(bat_down_g, "ad_all_tissues_sec/bat_d_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+gat_up <- deg_a_f |> filter(organ %in% "Gonadal_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+gat_up_g <- na.omit(gat_up$symbol) 
+write.table(gat_up_g, "ad_all_tissues_sec/gat_u_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+gat_down <- deg_a_f |> filter(organ %in% "Gonadal_Fat", DGE %in% "Downregulated") |> arrange(log2FoldChange)
+gat_down_g <- na.omit(gat_down$symbol)
+write.table(gat_down_g, "ad_all_tissues_sec/gat_d_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+scat_up <- deg_a_f |> filter(organ %in% "Subcutaneous_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+scat_up_g <- na.omit(scat_up$symbol)
+write.table(scat_up_g, "ad_all_tissues_sec/scat_u_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+scat_down <- deg_a_f |> filter(organ %in% "Subcutaneous_Fat", DGE %in% "Downregulated") |> arrange(log2FoldChange)
+scat_down_g <- na.omit(scat_down$symbol)
+write.table(scat_down_g, "ad_all_tissues_sec/scat_d_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+mat_up <- deg_a_f |> filter(organ %in% "Mesenteric_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+mat_up_g <- na.omit(mat_up$symbol)
+write.table(mat_up_g, "ad_all_tissues_sec/mat_u_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+mat_down <- deg_a_f |> filter(organ %in% "Mesenteric_Fat", DGE %in% "Downregulated") |> arrange(log2FoldChange)
+mat_down_g <- na.omit(mat_down$symbol)
+write.table(mat_down_g, "ad_all_tissues_sec/mat_d_gs.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+```
+
+All Proteins
+
+```{r}
+deg_a <- read.csv("df_3_all_organs.csv")
+deg_a_f <- deg_a|> filter(organ %in% c("Brown_Fat", "Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat"))
+
+bat_up <- deg_a_f |> filter(organ %in% "Brown_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+bat_up_g <- bat_up$symbol
+write.table(bat_up_g, "ad_all_tissues/bat_u_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+bat_down <- deg_a_f |> filter(organ %in% "Brown_Fat", DGE %in% "Downregulated") |> arrange(desc(log2FoldChange))
+bat_down_g <- bat_down$symbol
+write.table(bat_down_g, "ad_all_tissues/bat_d_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+gat_up <- deg_a_f |> filter(organ %in% "Gonadal_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+gat_up_g <- gat_up$symbol
+write.table(gat_up_g, "ad_all_tissues/gat_u_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+gat_down <- deg_a_f |> filter(organ %in% "Gonadal_Fat", DGE %in% "Downregulated") |> arrange(desc(log2FoldChange))
+gat_down_g <- gat_down$symbol
+write.table(gat_down_g, "ad_all_tissues/gat_d_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+scat_up <- deg_a_f |> filter(organ %in% "Subcutaneous_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+scat_up_g <- scat_up$symbol
+write.table(scat_up_g, "ad_all_tissues/scat_u_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+scat_down <- deg_a_f |> filter(organ %in% "Subcutaneous_Fat", DGE %in% "Downregulated") |> arrange(desc(log2FoldChange))
+scat_down_g <- scat_down$symbol
+write.table(scat_down_g, "ad_all_tissues/scat_d_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+mat_up <- deg_a_f |> filter(organ %in% "Mesenteric_Fat", DGE %in% "Upregulated") |> arrange(desc(log2FoldChange))
+mat_up_g <- mat_up$symbol
+write.table(mat_up_g, "ad_all_tissues/mat_u_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+mat_down <- deg_a_f |> filter(organ %in% "Mesenteric_Fat", DGE %in% "Downregulated") |> arrange(desc(log2FoldChange))
+mat_down_g <- mat_down$symbol
+write.table(mat_down_g, "ad_all_tissues/mat_d_g.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+```
+
+GSEA
+
+```{r}
+organs <- c("Bone", "Brain","Brown_Fat", "Gonadal_Fat", "Heart", "Kidney", "Limb_Muscle", "Liver", "Lung", "Marrow","Mesenteric_Fat", "Pancreas", "Skin", "Small_Intestine", "Spleen", "Subcutaneous_Fat","White_Blood_Cells")
+
+all_rawcounts <- read.table(file = "counttable_raw.tsv", header = TRUE)
+matching_symbols <- data.frame(mapIds(org.Mm.eg.db,
+                           keys = row.names(all_rawcounts),
+                           keytype = "ENSEMBL",
+                           column = "SYMBOL",
+                           multiVals = first))
+colnames(matching_symbols)[1] <- "symbol"
+matching_symbols_f <- matching_symbols |> filter(is.na(symbol) == FALSE) |> distinct()
+```
+
+Only Secreted Proteins
+
+```{r}
+deg_a <- read.csv("df_4_all_organs.csv")
+deg_a_f <- deg_a |> filter(organ %in% c("Brown_Fat", "Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat"), sec_prot %in% "Secreted")
+
+bat_gsea <- deg_a_f |> filter(organ %in% "Brown_Fat") |> arrange(desc(score))
+bat_rnk <- data.frame("GeneName" = bat_gsea$symbol, "rank" = bat_gsea$score)
+bat_rnk <- bat_rnk[which(is.na(bat_rnk$GeneName) == FALSE),]
+write.csv(bat_rnk, "gsea/bat_gsea.csv", row.names = FALSE)
+
+gat_gsea <- deg_a_f |> filter(organ %in% "Gonadal_Fat") |> arrange(desc(score))
+gat_rnk <- data.frame("GeneName" = gat_gsea$symbol, "rank" = gat_gsea$score)
+gat_rnk <- gat_rnk[which(is.na(gat_rnk$GeneName) == FALSE),]
+write.csv(gat_rnk, "gsea/gat_gsea.csv", row.names = FALSE)
+
+mat_gsea <- deg_a_f |> filter(organ %in% "Mesenteric_Fat") |> arrange(desc(score))
+mat_rnk <- data.frame("GeneName" = mat_gsea$symbol, "rank" = mat_gsea$score)
+mat_rnk <- mat_rnk[which(is.na(mat_rnk$GeneName) == FALSE),]
+write.csv(mat_rnk, "gsea/mat_gsea.csv", row.names = FALSE)
+
+sat_gsea <- deg_a_f |> filter(organ %in% "Subcutaneous_Fat") |> arrange(desc(score))
+sat_rnk <- data.frame("GeneName" = sat_gsea$symbol, "rank" = sat_gsea$score)
+sat_rnk <- sat_rnk[which(is.na(sat_rnk$GeneName) == FALSE),]
+write.csv(sat_rnk, "gsea/sat_gsea.csv", row.names = FALSE)
+```
+
+```{r}
+all_metadata <- read.table(file = "experimentDesign.tsv", header = TRUE)
+
+metadatacolnames <- rownames(all_metadata)
+colnames(all_rawcounts) <- metadatacolnames
+
+all_metadata$age <- factor(all_metadata$age)
+all_metadata$sex <- factor(all_metadata$sex)
+
+all_metadata_arr <- all_metadata |> dplyr::arrange(tissue, age)
+idx_1 <- match(row.names(all_metadata_arr), colnames(all_rawcounts))
+all_rawcounts_arr <- subset(all_rawcounts, select = idx_1)
+
+adipose <- c("Brown_Fat", "Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat")
+
+list <- vector("list", 4)
+k <- 1
+for(i in adipose){
+  organ_metadata <- all_metadata_arr |> filter(tissue == i)
+  organ_rawcount <- all_rawcounts_arr|> dplyr::select(matches(rownames(organ_metadata)))
+  metadatacolnames <- rownames(organ_metadata)
+  colnames(organ_rawcount) <- metadatacolnames
+  organ_metadata$age <- factor(organ_metadata$age)
+  organ_metadata$sex <- factor(organ_metadata$sex)
+  
+  dds <- DESeqDataSetFromMatrix(countData = organ_rawcount,
+                                            colData = organ_metadata,
+                                            design = ~ sex + age)
+  
+  dds <- estimateSizeFactors(dds)
+  normalized_counts <- data.frame(counts(dds, normalized=TRUE))
+  normalized_counts_f <- normalized_counts[rownames(matching_symbols_f),]
+  rownames(normalized_counts_f) <- matching_symbols_f$symbol
+  x <- deg_a_f |> filter(organ %in% i) |> arrange(desc(score))
+  normalized_counts_f <- normalized_counts_f[x$symbol,]
+  list[[k]] <- normalized_counts_f
+  k <- k + 1
+}
+
+names(list) <- adipose
+```
+
+```{r}
+write.csv(list[[1]], "gsea/bat_exp.csv", row.names = TRUE)
+write.csv(list[[2]], "gsea/gat_exp.csv", row.names = TRUE)
+write.csv(list[[3]], "gsea/mat_exp.csv", row.names = TRUE)
+write.csv(list[[4]], "gsea/sat_exp.csv", row.names = TRUE)
+```
+
+All Proteins
+
+```{r}
+deg_a <- read.csv("df_4_all_organs.csv")
+deg_a_f <- deg_a |> filter(organ %in% c("Brown_Fat", "Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat"))
+
+bat_gsea <- deg_a_f |> filter(organ %in% "Brown_Fat") |> arrange(desc(score))
+bat_rnk <- data.frame("GeneName" = bat_gsea$symbol, "rank" = bat_gsea$score)
+bat_rnk <- bat_rnk[which(is.na(bat_rnk$GeneName) == FALSE),]
+write.csv(bat_rnk, "gsea/bat_gsea_a.csv", row.names = FALSE)
+
+gat_gsea <- deg_a_f |> filter(organ %in% "Gonadal_Fat") |> arrange(desc(score))
+gat_rnk <- data.frame("GeneName" = gat_gsea$symbol, "rank" = gat_gsea$score)
+gat_rnk <- gat_rnk[which(is.na(gat_rnk$GeneName) == FALSE),]
+write.csv(gat_rnk, "gsea/gat_gsea_a.csv", row.names = FALSE)
+
+mat_gsea <- deg_a_f |> filter(organ %in% "Mesenteric_Fat") |> arrange(desc(score))
+mat_rnk <- data.frame("GeneName" = mat_gsea$symbol, "rank" = mat_gsea$score)
+mat_rnk <- mat_rnk[which(is.na(mat_rnk$GeneName) == FALSE),]
+write.csv(mat_rnk, "gsea/mat_gsea_a.csv", row.names = FALSE)
+
+sat_gsea <- deg_a_f |> filter(organ %in% "Subcutaneous_Fat") |> arrange(desc(score))
+sat_rnk <- data.frame("GeneName" = sat_gsea$symbol, "rank" = sat_gsea$score)
+sat_rnk <- sat_rnk[which(is.na(sat_rnk$GeneName) == FALSE),]
+write.csv(sat_rnk, "gsea/sat_gsea_a.csv", row.names = FALSE)
+```
+
+```{r}
+all_metadata <- read.table(file = "experimentDesign.tsv", header = TRUE)
+
+metadatacolnames <- rownames(all_metadata)
+colnames(all_rawcounts) <- metadatacolnames
+
+all_metadata$age <- factor(all_metadata$age)
+all_metadata$sex <- factor(all_metadata$sex)
+
+all_metadata_arr <- all_metadata |> dplyr::arrange(tissue, age)
+idx_1 <- match(row.names(all_metadata_arr), colnames(all_rawcounts))
+all_rawcounts_arr <- subset(all_rawcounts, select = idx_1)
+
+adipose <- c("Brown_Fat", "Gonadal_Fat", "Mesenteric_Fat", "Subcutaneous_Fat")
+
+list <- vector("list", 4)
+k <- 1
+for(i in adipose){
+  organ_metadata <- all_metadata_arr |> filter(tissue == i)
+  organ_rawcount <- all_rawcounts_arr|> dplyr::select(matches(rownames(organ_metadata)))
+  metadatacolnames <- rownames(organ_metadata)
+  colnames(organ_rawcount) <- metadatacolnames
+  organ_metadata$age <- factor(organ_metadata$age)
+  organ_metadata$sex <- factor(organ_metadata$sex)
+  
+  dds <- DESeqDataSetFromMatrix(countData = organ_rawcount,
+                                            colData = organ_metadata,
+                                            design = ~ sex + age)
+  
+  dds <- estimateSizeFactors(dds)
+  normalized_counts <- data.frame(counts(dds, normalized=TRUE))
+  normalized_counts_f <- normalized_counts[rownames(matching_symbols_f),]
+  rownames(normalized_counts_f) <- matching_symbols_f$symbol
+  list[[k]] <- normalized_counts_f
+  k <- k + 1
+}
+
+names(list) <- adipose
+```
+
+```{r}
+write.csv(list[[1]], "gsea/bat_exp.csv", row.names = TRUE)
+write.csv(list[[2]], "gsea/gat_exp.csv", row.names = TRUE)
+write.csv(list[[3]], "gsea/mat_exp.csv", row.names = TRUE)
+write.csv(list[[4]], "gsea/sat_exp.csv", row.names = TRUE)
+```
+
+```{r}
+list_u <- list(gat_up_g, mat_up_g, scat_up_g)
+list_d <- list(gat_down_g, mat_down_g, scat_down_g)
+names(list_u) <- c("Gonadal_Fat_U", "Mesenteric_Fat_U", "Subcutaneous_Fat_U")
+names(list_d) <- c("Gonadal_Fa_D", "Mesenteric_Fat_D", "Subcutaneous_Fat_D")
+
+display_venn <- function(x, ...){
+  library(VennDiagram)
+  grid.newpage()
+  venn_object <- venn.diagram(x, filename = NULL, ...)
+  grid.draw(venn_object)
+}
+
+display_venn(
+  list_u,
+  fill = c("#999999", "#E69F00", "#56B4E9")
+  )
+
+display_venn(
+  list_d,
+  fill = c("#999999", "#E69F00", "#56B4E9")
+  )
+
+v.tableu <- venn(list_u)
+v.tableu
+v.tabled <- venn(list_d)
+v.tabled
+```
